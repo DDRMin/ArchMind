@@ -10,7 +10,13 @@ const baseConfig: MermaidConfig = {
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
 };
 
-export function MermaidDiagram({ diagram }: { diagram: string }) {
+type MermaidDiagramProps = {
+  diagram: string;
+  onRenderError?: (message: string) => void;
+  onRenderSuccess?: () => void;
+};
+
+export function MermaidDiagram({ diagram, onRenderError, onRenderSuccess }: MermaidDiagramProps) {
   const elementId = useId().replace(/:/g, "-");
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -18,6 +24,7 @@ export function MermaidDiagram({ diagram }: { diagram: string }) {
   useEffect(() => {
     if (!diagram.trim()) {
       setSvg("");
+      setError(null);
       return;
     }
 
@@ -30,19 +37,22 @@ export function MermaidDiagram({ diagram }: { diagram: string }) {
         if (isSubscribed) {
           setSvg(renderedSvg);
           setError(null);
+          onRenderSuccess?.();
         }
       })
       .catch((err: unknown) => {
         if (isSubscribed) {
-          setError(err instanceof Error ? err.message : "Failed to render diagram");
+          const message = err instanceof Error ? err.message : "Failed to render diagram";
+          setError(message);
           setSvg("");
+          onRenderError?.(message);
         }
       });
 
     return () => {
       isSubscribed = false;
     };
-  }, [diagram, elementId]);
+  }, [diagram, elementId, onRenderError, onRenderSuccess]);
 
   if (error) {
     return (

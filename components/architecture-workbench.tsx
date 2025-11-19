@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Loader2, RefreshCcw, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { MermaidDiagram } from "@/components/mermaid-diagram";
 
 const SAMPLE_REQUIREMENTS = `Multi-tenant SaaS analytics platform for retailers with streaming ingestion, AI insights, and governance. Must support regional data residency, role-based access, and pluggable visualization widgets.`;
+const MAX_MERMAID_RETRIES = 3;
 
 type ArchitectureResponse = {
   architecture: string;
@@ -31,6 +32,10 @@ export function ArchitectureWorkbench() {
   const [result, setResult] = useState<ArchitectureResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastPrompt, setLastPrompt] = useState("");
+  const [autoRetryAttempts, setAutoRetryAttempts] = useState(0);
+  const [autoRetryMessage, setAutoRetryMessage] = useState<string | null>(null);
+  const [isAutoRetrying, setIsAutoRetrying] = useState(false);
 
   const explanation = useMemo(() => {
     if (!result?.explanation) {
@@ -49,6 +54,22 @@ export function ArchitectureWorkbench() {
     };
   }, [result]);
 
+  const fetchArchitecture = useCallback(async (prompt: string) => {
+    const response = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ requirements: prompt }),
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(payload?.error ?? "Unable to generate architecture.");
+    }
+
+    return payload as ArchitectureResponse;
+  }, []);
+
   async function handleGenerate() {
     const prompt = requirements.trim();
     if (!prompt) {
@@ -58,21 +79,13 @@ export function ArchitectureWorkbench() {
 
     setIsLoading(true);
     setError(null);
+    setAutoRetryMessage(null);
 
     try {
-      const response = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requirements: prompt }),
-      });
-
-      const payload = await response.json();
-
-      if (!response.ok) {
-        throw new Error(payload?.error ?? "Unable to generate architecture.");
-      }
-
-      setResult(payload as ArchitectureResponse);
+      const payload = await fetchArchitecture(prompt);
+      setResult(payload);
+      setLastPrompt(prompt);
+      setAutoRetryAttempts(0);
     } catch (apiError) {
       setError(
         apiError instanceof Error
@@ -84,10 +97,74 @@ export function ArchitectureWorkbench() {
     }
   }
 
+  const runAutoRetry = useCallback(async () => {
+    if (!lastPrompt) {
+      throw new Error("No prompt available for regeneration.");
+    }
+
+    setIsAutoRetrying(true);
+    try {
+      const payload = await fetchArchitecture(lastPrompt);
+      setResult(payload);
+      return payload;
+    } finally {
+      setIsAutoRetrying(false);
+    }
+  }, [fetchArchitecture, lastPrompt]);
+
+  const handleMermaidRenderError = useCallback(
+    async (message: string) => {
+      if (!lastPrompt) {
+        setAutoRetryMessage(`Mermaid render error: ${message}`);
+        return;
+      }
+
+      if (isLoading || isAutoRetrying) {
+        setAutoRetryMessage("Mermaid render error detected. Waiting for current generation...");
+        return;
+      }
+
+      if (autoRetryAttempts >= MAX_MERMAID_RETRIES) {
+        setAutoRetryMessage(
+          `Mermaid render error persists after ${MAX_MERMAID_RETRIES} retries. Latest error: ${message}`
+        );
+        return;
+      }
+
+      const nextAttempt = autoRetryAttempts + 1;
+      setAutoRetryAttempts(nextAttempt);
+      setAutoRetryMessage(
+        `Mermaid syntax error detected. Regenerating via Gemini (${nextAttempt}/${MAX_MERMAID_RETRIES})...`
+      );
+
+      try {
+        await runAutoRetry();
+      } catch (autoError) {
+        setAutoRetryMessage(
+          `Automatic regeneration failed: ${
+            autoError instanceof Error ? autoError.message : "Unknown error"
+          }`
+        );
+      }
+    },
+    [autoRetryAttempts, isAutoRetrying, isLoading, lastPrompt, runAutoRetry]
+  );
+
+  const handleMermaidRenderSuccess = useCallback(() => {
+    if (autoRetryAttempts > 0 || autoRetryMessage) {
+      setAutoRetryAttempts(0);
+      setAutoRetryMessage(null);
+    }
+  }, [autoRetryAttempts, autoRetryMessage]);
+
   function handleReset() {
     setRequirements("");
     setResult(null);
     setError(null);
+    setLastPrompt("");
+    setAutoRetryAttempts(0);
+    setAutoRetryMessage(null);
+    setIsAutoRetrying(false);
   }
 
   function applySample() {
@@ -237,7 +314,21 @@ export function ArchitectureWorkbench() {
               <section className="space-y-4">
                 <h2 className="text-lg font-semibold text-indigo-100">Rendered Mermaid diagram</h2>
                 {result.mermaidDiagram ? (
-                  <MermaidDiagram diagram={result.mermaidDiagram} />
+                  <>
+                    <MermaidDiagram
+                      diagram={result.mermaidDiagram}
+                      onRenderError={handleMermaidRenderError}
+                      onRenderSuccess={handleMermaidRenderSuccess}
+                    />
+                    {(autoRetryMessage || isAutoRetrying) && (
+                      <p className="text-sm text-amber-200">
+                        {isAutoRetrying && (
+                          <Loader2 className="mr-2 inline size-4 animate-spin align-middle" />
+                        )}
+                        {autoRetryMessage ?? "Auto-regenerating diagram..."}
+                      </p>
+                    )}
+                  </>
                 ) : (
                   <p className="text-sm text-slate-200/70">
                     Gemini did not provide a Mermaid definition. Refine the prompt or use the textual
