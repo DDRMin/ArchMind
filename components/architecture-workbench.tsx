@@ -14,6 +14,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { MermaidDiagram } from "@/components/mermaid-diagram";
 
 const SAMPLE_REQUIREMENTS = `Multi-tenant SaaS analytics platform for retailers with streaming ingestion, AI insights, and governance. Must support regional data residency, role-based access, and pluggable visualization widgets.`;
 
@@ -22,6 +23,7 @@ type ArchitectureResponse = {
   components: string[];
   explanation: string;
   diagramDescription: string;
+  mermaidDiagram: string;
 };
 
 export function ArchitectureWorkbench() {
@@ -228,6 +230,20 @@ export function ArchitectureWorkbench() {
                 <pre className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm text-indigo-100">
                   {result.diagramDescription}
                 </pre>
+              </section>
+
+              <Separator className="bg-white/10" />
+
+              <section className="space-y-4">
+                <h2 className="text-lg font-semibold text-indigo-100">Rendered Mermaid diagram</h2>
+                {result.mermaidDiagram ? (
+                  <MermaidDiagram diagram={result.mermaidDiagram} />
+                ) : (
+                  <p className="text-sm text-slate-200/70">
+                    Gemini did not provide a Mermaid definition. Refine the prompt or use the textual
+                    description above to craft one manually.
+                  </p>
+                )}
               </section>
             </div>
           )}

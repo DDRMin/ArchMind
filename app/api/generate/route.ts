@@ -8,7 +8,8 @@ const PROMPT_TEMPLATE = `Act as a senior software architect. Based on the follow
   "architecture": "high level view",
   "components": ["Key component or service descriptions"],
   "explanation": "Reasons and justification. End with a line that starts with 'Refinement Suggestions:'",
-  "diagramDescription": "PlantUML-like textual diagram"
+  "diagramDescription": "PlantUML-like textual diagram",
+  "mermaidDiagram": "A Mermaid v11-compliant diagram (graph TD...)"
 }
 The response must be concise, practical, and written in plain English.
 Requirements: {{REQUIREMENTS}}
@@ -19,6 +20,7 @@ type ArchitectureResponse = {
   components: string[];
   explanation: string;
   diagramDescription: string;
+  mermaidDiagram: string;
 };
 
 function ensureComponents(value: unknown): string[] {
@@ -69,8 +71,17 @@ function ensureComponents(value: unknown): string[] {
   return [];
 }
 
+function sanitizeMermaid(value?: string): string {
+  if (!value) return "";
+  return value
+    .replace(/```(mermaid)?/gi, "")
+    .replace(/~~~(mermaid)?/gi, "")
+    .trim();
+}
+
 function normalizePayload(payload: Partial<ArchitectureResponse>): ArchitectureResponse {
   const components = ensureComponents(payload.components);
+  const mermaidDiagram = sanitizeMermaid(payload.mermaidDiagram);
 
   return {
     architecture:
@@ -91,6 +102,9 @@ function normalizePayload(payload: Partial<ArchitectureResponse>): ArchitectureR
     diagramDescription:
       payload.diagramDescription?.trim() ??
       "@startuml\nactor User\nUser -> UI : Interacts\nUI -> Backend : REST/GraphQL\nBackend -> DataStore : Persist\n@enduml",
+    mermaidDiagram:
+      mermaidDiagram ||
+      "graph TD\n  User[End User] --> UI[UI Layer]\n  UI --> API[API Gateway]\n  API --> Services[Core Services]\n  Services --> DB[(Data Platform)]",
   };
 }
 
