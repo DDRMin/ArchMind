@@ -1,23 +1,17 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 import "./globals.css";
-
-const sans = Inter({
-  variable: "--font-sans",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-const mono = JetBrains_Mono({
-  variable: "--font-mono",
-  subsets: ["latin"],
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "Archmind | Software Engineering Workbench",
   description:
     "Generate AI-assisted solution architectures, rationale, and diagram descriptions powered by Gemini.",
+  icons: {
+    icon: [{ url: "/iconArchMind.png", type: "image/png", sizes: "any" }],
+    shortcut: "/iconArchMind.png",
+    apple: "/iconArchMind.png",
+  },
 };
 
 export default function RootLayout({
@@ -27,7 +21,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${sans.variable} ${mono.variable} antialiased`}>
+      <body className={`${GeistSans.variable} ${GeistMono.variable} antialiased`}>
         {children}
       </body>
     </html>
